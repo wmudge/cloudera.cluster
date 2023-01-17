@@ -14,5 +14,6 @@
 
 ---
 
-host_ssh_username: root
-host_ssh_password: cloudera
+autotls_host_username: root
+#autotls_host_password: changeme
+#autotls_host_private_key: not_defined.txt

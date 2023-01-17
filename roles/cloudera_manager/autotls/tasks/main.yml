@@ -30,38 +30,36 @@
 
 - name: Check if password or key is used to connect to machines
   set_fact:
-    use_password: "{{ true if node_password is defined and node_password|length > 0 else false }}"
+    use_password: "{{ true if autotls_host_password is defined and autotls_host_password|length > 0 else false }}"
 
-- name: DEBUG Auto-TLS using password
-  debug:
-    msg: "{{ lookup('template', 'auto-tls.json') }}"
-  when: use_password and debug | default(false)
-
-- name: Enable Auto-TLS
+- name: Enable Auto-TLS via password
   cm_api:
     endpoint: "/cm/commands/generateCmca"
     method: POST
     body: "{{ lookup('template', 'auto-tls.json') }}"
     timeout: 360
   ignore_errors: true
+  no_log: yes
   when: use_password
+  notify:
+    - restart cloudera-scm-server
+    - restart cloudera management service
+    - restart cloudera-scm-agent
 
-- name: Set node_key on one line
+- name: Format Auto-TLS private key
   set_fact:
-    node_key_one_line: "{{ lookup('file', '~/node_key' ) | replace('\n', '\\n') | replace('\"', '\\\"' ) }}"
+    node_key_one_line: "{{ lookup('file', autotls_host_private_key) | replace('\n', '\\n') | replace('\"', '\\\"' ) }}"
+  no_log: yes
+  delegate_to: localhost
   when: not use_password
 
-- name: DEBUG Auto-TLS using key
-  debug:
-    msg: "{{ lookup('template', 'auto-tls-key.json') }}"
-  when: not use_password
-
-- name: Enable Auto-TLS
+- name: Enable Auto-TLS via private key
   cm_api:
     endpoint: "/cm/commands/generateCmca"
     method: POST
     body: "{{ lookup('template', 'auto-tls-key.json') }}"
   ignore_errors: true
+  no_log: yes
   when: not use_password
   notify:
     - restart cloudera-scm-server

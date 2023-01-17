@@ -3,7 +3,7 @@
     "configureAllServices" : "true",
     "sshPort" : 22,
     {% if freeipa_activated %}"trustedCaCerts" : "/etc/ipa/ca.crt",{% endif %}
-    "userName" : "root",
+    "userName" : "{{ autotls_host_username }}",
     "privateKey": "{{ node_key_one_line }}"
 } 
     
