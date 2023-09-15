@@ -130,19 +130,15 @@ OOZIE:
 OZONE:
   OZONE_DATANODE:
     log_dir: "{{ log_base }}/hadoop-ozone"
-    ozone.log.dir: "{{ log_base }}/hadoop-ozone"
   OZONE_MANAGER:
     log_dir: "{{ log_base }}/hadoop-ozone"
-    ozone.log.dir: "{{ log_base }}/hadoop-ozone"
     ranger_ozone_plugin_solr_audit_spool_directory: "{{ log_base }}/hadoop-ozone/ranger-audit/solr/spool"
   OZONE_RECON:
     log_dir: "{{ log_base }}/hadoop-ozone"
-    ozone.log.dir: "{{ log_base }}/hadoop-ozone"
   S3_GATEWAY:
     log_dir: "{{ log_base }}/hadoop-ozone"
   STORAGE_CONTAINER_MANAGER:
     log_dir: "{{ log_base }}/hadoop-ozone"
-    ozone.log.dir: "{{ log_base }}/hadoop-ozone"
 PHOENIX:
   PHOENIX_QUERY_SERVER:
     log_dir: "{{ log_base }}/phoenix"
