@@ -20,6 +20,7 @@ import io
 import json
 import logging
 
+from abc import abstractmethod
 from functools import wraps
 from typing import Union
 from urllib3 import disable_warnings
@@ -272,8 +273,8 @@ class ClusterTemplate(object):
 class ClouderaManagerModule(object):
     """Base Ansible Module for API access to Cloudera Manager."""
 
-    @classmethod
-    def handle_process(cls, f):
+    # @classmethod
+    def handle_process(f):
         """Wrapper to handle API, retry, and HTTP errors."""
 
         @wraps(f)
@@ -311,9 +312,8 @@ class ClouderaManagerModule(object):
 
         return _impl
 
-    def __init__(self, module):
+    def prepare(self):
         # Set common parameters
-        self.module = module
         self.url = self.get_param("url", None)
         self.force_tls = self.get_param("force_tls")
         self.host = self.get_param("host")
@@ -326,9 +326,6 @@ class ClouderaManagerModule(object):
         self.debug = self.get_param("debug")
         self.agent_header = self.get_param("agent_header")
         self.proxy_server = self.get_param("proxy")
-
-        # Initialize common return values
-        self.changed = False
 
         # Configure the core CM API client parameters
         config = Configuration()
@@ -370,6 +367,106 @@ class ClouderaManagerModule(object):
 
         if self.verify_tls is False:
             disable_warnings(InsecureRequestWarning)
+
+    def __init__(
+        self,
+        argument_spec={},
+        bypass_checks=False,
+        no_log=False,
+        mutually_exclusive=[],
+        required_together=[],
+        required_one_of=[],
+        add_file_common_args=False,
+        supports_check_mode=False,
+        required_if=None,
+        required_by=None,
+    ):
+
+        # Establish base arguments
+        argument_spec.update(
+            host=dict(aliases=["hostname"]),
+            port=dict(type="int", default=7180),
+            version=dict(),
+            force_tls=dict(type="bool", default=False),
+            verify_tls=dict(type="bool", default=True, aliases=["tls"]),
+            ssl_ca_cert=dict(type="path", aliases=["tls_cert", "ssl_cert"]),
+            username=dict(required=True, aliases=["user"]),
+            password=dict(required=True, no_log=True),
+            debug=dict(type="bool", default=False, aliases=["debug_endpoints"]),
+            agent_header=dict(default="ClouderaFoundry", aliases=["user_agent"]),
+            proxy_server=dict(aliases=["proxy", "http_proxy"]),
+            url=dict(aliases=["endpoint", "cm_endpoint_url"]),
+        )
+
+        # Establish base spec logic
+        required_together.append(["username", "password"])
+        mutually_exclusive.append(["url", "host"])
+        required_one_of.append(["url", "host"])
+
+        # Establish module
+        self.module = AnsibleModule(
+            argument_spec=argument_spec,
+            bypass_checks=bypass_checks,
+            no_log=no_log,
+            mutually_exclusive=mutually_exclusive,
+            required_together=required_together,
+            required_one_of=required_one_of,
+            add_file_common_args=add_file_common_args,
+            supports_check_mode=supports_check_mode,
+            required_if=required_if,
+            required_by=required_by,
+        )
+
+        # Initialize return values
+        self.output = dict(changed=False)
+        self.diff = dict(before={}, after={})
+
+        # Execute prepare() chain
+        self.prepare()
+
+    def execute(self):
+        # Execute process() chain
+        def _decorate_output(result):
+            if self.debug:
+                log = self.log_capture.getvalue()
+                result.update(debug=log, debug_lines=log.split("\n"))
+
+            if self.module._diff:
+                result.update(diff=self.diff)
+
+            return result
+
+        try:
+            self.initialize_client()
+            self.process()
+        except ApiException as ae:
+            err = dict(
+                status_code=ae.status,
+            )
+            if ae.body:
+                try:
+                    err.update(msg=json.loads(ae.body)["message"])
+                except Exception:
+                    err.update(msg="API error: " + to_text(ae.reason))
+            else:
+                err.update(msg="API error: " + to_text(ae.reason))
+
+            self.module.fail_json(**_decorate_output(err))
+        except MaxRetryError as maxe:
+            err = dict(
+                msg="Request error: " + to_text(maxe.reason), url=to_text(maxe.url)
+            )
+            self.module.fail_json(**_decorate_output(err))
+        except HTTPError as he:
+            err = dict(msg="HTTP request: " + str(he))
+            self.module.fail_json(**_decorate_output(err))
+
+        # Return execution
+        self.module.exit_json(**_decorate_output(self.output))
+
+    @abstractmethod
+    def process(self):
+        pass
 
     def get_param(self, param, default=None):
         """
@@ -573,6 +670,23 @@ class ClouderaManagerModule(object):
             required_if=required_if,
             required_by=required_by,
         )
+
+
+class MutableModuleMixin(ClouderaManagerModule):
+    def __init__(self, *args, argument_spec={}, **kwargs):
+        argument_spec.update(
+            message=dict(default="Managed by Ansible", aliases=["msg"]),
+        )
+        super().__init__(
+            *args, argument_spec=argument_spec, supports_check_mode=True, **kwargs
+        )
+
+    def prepare(self):
+        super().prepare()
+        self.message = self.get_param("message")
+
+    def process(self):
+        super().process()
 
 
 class ClouderaManagerMutableModule(ClouderaManagerModule):
