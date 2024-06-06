@@ -32,7 +32,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_info
 short_description: Retrieve information about the services of cluster
 description:
@@ -76,7 +75,6 @@ extends_documentation_fragment:
 """
 
 EXAMPLES = r"""
----
 - name: Gather details of the services of a cluster
   cloudera.cluster.service_info:
     host: "example.cloudera.host"
@@ -95,7 +93,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 services:
   description: Details about the services of a cluster.
   type: list
@@ -218,8 +215,20 @@ services:
 
 
 class ClusterServiceInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClusterServiceInfo, self).__init__(module)
+    def __init__(self):
+        argument_spec = dict(
+            cluster=dict(required=True, aliases=["cluster_name"]),
+            service=dict(aliases=["service_name", "name"]),
+            view=dict(
+                default="summary",
+                choices=["summary", "full", "healthcheck", "export", "redacted"],
+            ),
+        )
+
+        super().__init__(argument_spec=argument_spec, supports_check_mode=True)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
         self.cluster = self.get_param("cluster")
@@ -227,14 +236,12 @@ class ClusterServiceInfo(ClouderaManagerModule):
         self.view = self.get_param("view")
 
         # Initialize the return values
-        self.services = []
+        self.output["services"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        api_instance = ServicesResourceApi(self.api_client)
+        super().process()
+
+        api = ServicesResourceApi(self.api_client)
 
         if self.view == "healthcheck":
             self.view = "full_with_health_check_explanation"
@@ -243,9 +250,9 @@ class ClusterServiceInfo(ClouderaManagerModule):
 
         if self.service:
             try:
-                self.services.append(
+                self.output["services"].append(
                     parse_service_result(
-                        api_instance.read_service(
+                        api.read_service(
                             cluster_name=self.cluster,
                             service_name=self.service,
                             view=self.view,
@@ -256,39 +263,16 @@ class ClusterServiceInfo(ClouderaManagerModule):
                 if e.status != 404:
                     raise e
         else:
-            self.services = [
+            self.output["services"] = [
                 parse_service_result(s)
-                for s in api_instance.read_services(
+                for s in api.read_services(
                     cluster_name=self.cluster, view=self.view
                 ).items
             ]
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(aliases=["service_name", "name"]),
-            view=dict(
-                default="summary",
-                choices=["summary", "full", "healthcheck", "export", "redacted"],
-            ),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceInfo(module)
-
-    output = dict(
-        changed=False,
-        services=result.services,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceInfo().execute()
 
 
 if __name__ == "__main__":
