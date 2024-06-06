@@ -17,14 +17,18 @@
 import json
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
-    ClouderaManagerMutableModule,
+    ClouderaManagerModule,
+    MutableModuleMixin,
     resolve_parameter_updates,
+)
+
+from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
+    ServiceModuleMixin,
 )
 
 from cm_client import (
     ApiConfig,
     ApiServiceConfig,
-    ClustersResourceApi,
     ServicesResourceApi,
 )
 from cm_client.rest import ApiException
@@ -217,40 +221,38 @@ config:
 """
 
 
-class ClusterServiceConfig(ClouderaManagerMutableModule):
-    def __init__(self, module):
-        super(ClusterServiceConfig, self).__init__(module)
+class ClusterServiceConfig(
+    ServiceModuleMixin, MutableModuleMixin, ClouderaManagerModule
+):
+    def __init__(self):
+        argument_spec = dict(
+            parameters=dict(type="dict", required=True, aliases=["params"]),
+            view=dict(
+                default="summary",
+                choices=["summary", "full"],
+            ),
+        )
+
+        super().__init__(argument_spec=argument_spec)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.params = self.get_param("parameters")
-        self.purge = self.get_param("purge")
         self.view = self.get_param("view")
 
-        # Initialize the return value
-        self.changed = False
-        self.diff = {}
-        self.config = []
+        # Initialize the return values
+        self.output["config"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerMutableModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
         refresh = True
-        api_instance = ServicesResourceApi(self.api_client)
+        api = ServicesResourceApi(self.api_client)
 
         try:
-            existing = api_instance.read_service_config(self.cluster, self.service)
+            existing = api.read_service_config(self.cluster, self.service)
         except ApiException as ex:
             if ex.status == 404:
                 self.module.fail_json(msg=json.loads(ex.body)["message"])
@@ -263,7 +265,7 @@ class ClusterServiceConfig(ClouderaManagerMutableModule):
         change_set = resolve_parameter_updates(current, incoming, self.purge)
 
         if change_set:
-            self.changed = True
+            self.output["changed"] = True
 
             if self.module._diff:
                 self.diff = dict(
@@ -279,9 +281,9 @@ class ClusterServiceConfig(ClouderaManagerMutableModule):
                     items=[ApiConfig(name=k, value=v) for k, v in change_set.items()]
                 )
 
-                self.config = [
+                self.output["config"] = [
                     p.to_dict()
-                    for p in api_instance.update_service_config(
+                    for p in api.update_service_config(
                         self.cluster, self.service, message=self.message, body=body
                     ).items
                 ]
@@ -290,44 +292,16 @@ class ClusterServiceConfig(ClouderaManagerMutableModule):
                     refresh = False
 
         if refresh:
-            self.config = [
+            self.output["config"] = [
                 p.to_dict()
-                for p in api_instance.read_service_config(
+                for p in api.read_service_config(
                     self.cluster, self.service, view=self.view
                 ).items
             ]
 
 
 def main():
-    module = ClouderaManagerMutableModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name", "name"]),
-            parameters=dict(type="dict", required=True, aliases=["params"]),
-            purge=dict(type="bool", default=False),
-            view=dict(
-                default="summary",
-                choices=["summary", "full"],
-            ),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceConfig(module)
-
-    output = dict(
-        changed=result.changed,
-        config=result.config,
-    )
-
-    if module._diff:
-        output.update(diff=result.diff)
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceConfig().execute()
 
 
 if __name__ == "__main__":
