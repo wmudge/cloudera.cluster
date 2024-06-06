@@ -17,10 +17,15 @@ A common functions for Cloudera Manager service management
 """
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
+    ClouderaManagerModule,
     _parse_output,
 )
 
-from cm_client import ApiService
+from cm_client import (
+    ApiService,
+    ClustersResourceApi,
+)
+from cm_client.rest import ApiException
 
 SERVICE_OUTPUT = [
     "client_config_staleness_status",
@@ -44,3 +49,32 @@ def parse_service_result(service: ApiService) -> dict:
     output = dict(cluster_name=service.cluster_ref.cluster_name)
     output.update(_parse_output(service.to_dict(), SERVICE_OUTPUT))
     return output
+
+
+class ServiceModuleMixin(ClouderaManagerModule):
+    def __init__(self, *args, argument_spec={}, **kwargs):
+        argument_spec.update(
+            cluster=dict(required=True, aliases=["cluster_name"]),
+            service=dict(required=True, aliases=["service_name", "name"]),
+            purge=dict(type="bool", default=False),
+        ),
+
+        super().__init__(*args, argument_spec=argument_spec, **kwargs)
+
+    def prepare(self):
+        super().prepare()
+
+        self.cluster = self.get_param("cluster")
+        self.service = self.get_param("service")
+        self.purge = self.get_param("purge")
+
+    def process(self):
+        super().process()
+
+        try:
+            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
+        except ApiException as ex:
+            if ex.status == 404:
+                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
+            else:
+                raise ex
