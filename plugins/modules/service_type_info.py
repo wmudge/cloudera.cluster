@@ -28,7 +28,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_type_info
 short_description: Retrieve the service types of a cluster
 description:
@@ -51,7 +50,6 @@ extends_documentation_fragment:
 """
 
 EXAMPLES = r"""
----
 - name: Gather service type details
   cloudera.cluster.service_type_info:
     host: "example.cloudera.host"
@@ -62,7 +60,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 service_types:
   description: List of the service types available in the cluster.
   type: list
@@ -75,25 +72,30 @@ service_types:
 
 
 class ClusterServiceTypeInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClusterServiceTypeInfo, self).__init__(module)
+    def __init__(self):
+        argument_spec = dict(
+            cluster=dict(required=True, aliases=["cluster_name"]),
+        )
+
+        super().__init__(argument_spec=argument_spec, supports_check_mode=True)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
         self.cluster = self.get_param("cluster")
 
         # Initialize the return values
-        self.service_types = []
+        self.output["service_types"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        api_instance = ClustersResourceApi(self.api_client)
+        super().process()
+
+        api = ClustersResourceApi(self.api_client)
 
         try:
-            self.service_types = (
-                api_instance.list_service_types(self.cluster).to_dict().get("items", [])
+            self.output["service_types"] = (
+                api.list_service_types(self.cluster).to_dict().get("items", [])
             )
         except ApiException as e:
             if e.status != 404:
@@ -101,25 +103,7 @@ class ClusterServiceTypeInfo(ClouderaManagerModule):
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceTypeInfo(module)
-
-    output = dict(
-        changed=False,
-        service_types=result.service_types,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceTypeInfo().execute()
 
 
 if __name__ == "__main__":
