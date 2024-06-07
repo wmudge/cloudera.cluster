@@ -18,7 +18,7 @@ import json
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
-    MutableModuleMixin,
+    MutationModuleMixin,
     resolve_parameter_updates,
 )
 
@@ -222,7 +222,7 @@ config:
 
 
 class ClusterServiceConfig(
-    ServiceModuleMixin, MutableModuleMixin, ClouderaManagerModule
+    ServiceModuleMixin, MutationModuleMixin, ClouderaManagerModule
 ):
     def __init__(self):
         argument_spec = dict(
