@@ -23,8 +23,8 @@ from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
 
 from cm_client import (
     ApiRole,
-    ApiService,
     ClustersResourceApi,
+    ServicesResourceApi,
 )
 from cm_client.rest import ApiException
 
@@ -56,3 +56,47 @@ def parse_role_result(role: ApiRole) -> dict:
     )
     output.update(_parse_output(role.to_dict(), ROLE_OUTPUT))
     return output
+
+
+class RoleModuleMixin(ClouderaManagerModule):
+    """Module mixin to handle common service role dependencies.
+
+    Be sure to add the following doc_fragments:
+    * cloudera.cluster.cluster
+    * cloudera.cluster.service
+    """
+
+    def __init__(self, *args, argument_spec={}, **kwargs):
+        argument_spec.update(
+            cluster=dict(required=True, aliases=["cluster_name"]),
+            service=dict(required=True, aliases=["service_name"]),
+        ),
+
+        super().__init__(*args, argument_spec=argument_spec, **kwargs)
+
+    def prepare(self):
+        super().prepare()
+
+        self.cluster = self.get_param("cluster")
+        self.service = self.get_param("service")
+
+    def process(self):
+        super().process()
+
+        try:
+            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
+        except ApiException as ex:
+            if ex.status == 404:
+                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
+            else:
+                raise ex
+
+        try:
+            ServicesResourceApi(self.api_client).read_service(
+                self.cluster, self.service
+            )
+        except ApiException as ex:
+            if ex.status == 404:
+                self.module.fail_json(msg="Service does not exist: " + self.service)
+            else:
+                raise ex
