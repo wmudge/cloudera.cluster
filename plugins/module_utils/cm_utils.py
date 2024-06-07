@@ -32,11 +32,11 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.common.dict_transformations import recursive_diff
 from ansible.module_utils.common.text.converters import to_text
 from time import sleep
+
 from cm_client import (
     ApiClient,
     ApiCommand,
     ApiConfigList,
-    ApiRoleConfigGroup,
     Configuration,
 )
 from cm_client.rest import ApiException, RESTClientObject
@@ -47,16 +47,8 @@ from cm_client.apis.commands_resource_api import CommandsResourceApi
 __credits__ = ["frisch@cloudera.com"]
 __maintainer__ = ["wmudge@cloudera.com"]
 
-ROLE_CONFIG_GROUP = [
-    "name",
-    "role_type",
-    "base",
-    "display_name",
-    # "service_ref",
-]
 
-
-def _parse_output(entity: dict, filter: list) -> dict:
+def parse_output(entity: dict, filter: list) -> dict:
     output = {}
     for k in filter:
         if k == "tags":
@@ -64,13 +56,6 @@ def _parse_output(entity: dict, filter: list) -> dict:
         else:
             output[k] = entity[k]
 
-    return output
-
-
-def parse_role_config_group_result(role_config_group: ApiRoleConfigGroup) -> dict:
-    # Retrieve only the service identifier
-    output = dict(service_name=role_config_group.service_ref.service_name)
-    output.update(_parse_output(role_config_group.to_dict(), ROLE_CONFIG_GROUP))
     return output
 
 
