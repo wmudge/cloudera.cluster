@@ -19,10 +19,8 @@ import json
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
 )
-from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
-    ServiceModuleMixin,
-)
 from ansible_collections.cloudera.cluster.plugins.module_utils.role_utils import (
+    RoleModuleMixin,
     parse_role_result,
 )
 
@@ -45,20 +43,6 @@ author:
 requirements:
   - cm_client
 options:
-  cluster:
-    description:
-      - The associated cluster.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
-  service:
-    description:
-      - The associated service.
-    type: str
-    required: yes
-    aliases:
-      - service_name
   role:
     description:
       - A role name to examine.
@@ -103,6 +87,8 @@ options:
 extends_documentation_fragment:
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.cluster
+  - cloudera.cluster.service
 """
 
 EXAMPLES = r"""
@@ -266,7 +252,7 @@ roles:
 """
 
 
-class ClusterServiceRoleInfo(ServiceModuleMixin, ClouderaManagerModule):
+class ClusterServiceRoleInfo(RoleModuleMixin, ClouderaManagerModule):
     def __init__(self):
         argument_spec = dict(
             role=dict(aliases=["role_name", "name"]),

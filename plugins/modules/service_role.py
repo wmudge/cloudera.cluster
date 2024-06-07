@@ -20,10 +20,8 @@ from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     PurgeModuleMixin,
     resolve_tag_updates,
 )
-from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
-    ServiceModuleMixin,
-)
 from ansible_collections.cloudera.cluster.plugins.module_utils.role_utils import (
+    RoleModuleMixin,
     parse_role_result,
 )
 
@@ -36,7 +34,6 @@ from cm_client import (
     HostsResourceApi,
     RoleCommandsResourceApi,
     RolesResourceApi,
-    ServicesResourceApi,
 )
 from cm_client.rest import ApiException
 
@@ -56,20 +53,6 @@ author:
 requirements:
   - cm-client
 options:
-  cluster:
-    description:
-      - The associated cluster.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
-  service:
-    description:
-      - The associated service.
-    type: str
-    required: yes
-    aliases:
-      - service_name
   role:
     description:
       - The role name.
@@ -126,6 +109,8 @@ extends_documentation_fragment:
   - cloudera.cluster.cm_endpoint
   - cloudera.cluster.purge
   - cloudera.cluster.mutation
+  - cloudera.cluster.cluster
+  - cloudera.cluster.service
 attributes:
   check_mode:
     support: full
@@ -366,7 +351,7 @@ role:
 
 
 class ClusterServiceRole(
-    ServiceModuleMixin, PurgeModuleMixin, MutationModuleMixin, ClouderaManagerModule
+    RoleModuleMixin, PurgeModuleMixin, MutationModuleMixin, ClouderaManagerModule
 ):
     def __init__(self):
         argument_spec = dict(
@@ -407,16 +392,6 @@ class ClusterServiceRole(
 
     def process(self):
         super().process()
-
-        try:
-            ServicesResourceApi(self.api_client).read_service(
-                self.cluster, self.service
-            )
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Service does not exist: " + self.service)
-            else:
-                raise ex
 
         api = RolesResourceApi(self.api_client)
         existing = None
