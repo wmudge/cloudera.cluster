@@ -56,7 +56,6 @@ class ServiceModuleMixin(ClouderaManagerModule):
         argument_spec.update(
             cluster=dict(required=True, aliases=["cluster_name"]),
             service=dict(required=True, aliases=["service_name", "name"]),
-            purge=dict(type="bool", default=False),
         ),
 
         super().__init__(*args, argument_spec=argument_spec, **kwargs)
@@ -66,7 +65,6 @@ class ServiceModuleMixin(ClouderaManagerModule):
 
         self.cluster = self.get_param("cluster")
         self.service = self.get_param("service")
-        self.purge = self.get_param("purge")
 
     def process(self):
         super().process()
