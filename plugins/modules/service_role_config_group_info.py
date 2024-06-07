@@ -16,14 +16,13 @@
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
+)
+from ansible_collections.cloudera.cluster.plugins.module_utils.role_utils import (
+    RoleModuleMixin,
     parse_role_config_group_result,
 )
 
-from cm_client import (
-    ClustersResourceApi,
-    RoleConfigGroupsResourceApi,
-    ServicesResourceApi,
-)
+from cm_client import RoleConfigGroupsResourceApi
 from cm_client.rest import ApiException
 
 ANSIBLE_METADATA = {
@@ -33,7 +32,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_role_config_group_info
 short_description: Retrieve information about a cluster service role config group or groups
 description:
@@ -43,20 +41,6 @@ author:
 requirements:
   - cm_client
 options:
-  cluster:
-    description:
-      - The associated cluster.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
-  service:
-    description:
-      - The associated service.
-    type: str
-    required: yes
-    aliases:
-      - service_name
   role_config_group:
     description:
       - The role config group to examine.
@@ -70,10 +54,11 @@ options:
 extends_documentation_fragment:
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.cluster
+  - cloudera.cluster.service
 """
 
 EXAMPLES = r"""
----
 - name: Gather the configuration details for a cluster service role
   cloudera.cluster.service_role_config_info:
     host: "example.cloudera.internal"
@@ -95,7 +80,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 role_config_groups:
   description:
     - List of service role config groups.
@@ -137,48 +121,33 @@ role_config_groups:
 """
 
 
-class ClusterServiceRoleConfigGroupInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClusterServiceRoleConfigGroupInfo, self).__init__(module)
+class ClusterServiceRoleConfigGroupInfo(RoleModuleMixin, ClouderaManagerModule):
+    def __init__(self):
+        argument_spec = dict(
+            role_config_group=dict(aliases=["role_config_group", "name"]),
+        )
+
+        super().__init__(argument_spec=argument_spec, supports_check_mode=True)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.role_config_group = self.get_param("role_config_group")
 
         # Initialize the return values
-        self.output = []
+        self.output["role_config_groups"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
-        try:
-            ServicesResourceApi(self.api_client).read_service(
-                self.cluster, self.service
-            )
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Service does not exist: " + self.service)
-            else:
-                raise ex
-
-        api_instance = RoleConfigGroupsResourceApi(self.api_client)
+        api = RoleConfigGroupsResourceApi(self.api_client)
 
         results = []
         if self.role_config_group:
             try:
                 results = [
-                    api_instance.read_role_config_group(
+                    api.read_role_config_group(
                         cluster_name=self.cluster,
                         role_config_group_name=self.role_config_group,
                         service_name=self.service,
@@ -188,20 +157,20 @@ class ClusterServiceRoleConfigGroupInfo(ClouderaManagerModule):
                 if e.status != 404:
                     raise e
         else:
-            results = api_instance.read_role_config_groups(
+            results = api.read_role_config_groups(
                 cluster_name=self.cluster,
                 service_name=self.service,
             ).items
 
         for r in results:
             # Get role membership
-            roles = api_instance.read_roles(
+            roles = api.read_roles(
                 cluster_name=self.cluster,
                 service_name=self.service,
                 role_config_group_name=r.name,
             )
 
-            self.output.append(
+            self.output["role_config_groups"].append(
                 {
                     **parse_role_config_group_result(r),
                     "role_names": [r.name for r in roles.items],
@@ -210,27 +179,7 @@ class ClusterServiceRoleConfigGroupInfo(ClouderaManagerModule):
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name"]),
-            role_config_group=dict(aliases=["role_config_group", "name"]),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceRoleConfigGroupInfo(module)
-
-    output = dict(
-        changed=False,
-        role_config_groups=result.output,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceRoleConfigGroupInfo().execute()
 
 
 if __name__ == "__main__":
