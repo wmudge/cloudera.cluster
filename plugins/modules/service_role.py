@@ -15,9 +15,16 @@
 # limitations under the License.
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
-    ClouderaManagerMutableModule,
-    parse_role_result,
+    ClouderaManagerModule,
+    MutationModuleMixin,
+    PurgeModuleMixin,
     resolve_tag_updates,
+)
+from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
+    ServiceModuleMixin,
+)
+from ansible_collections.cloudera.cluster.plugins.module_utils.role_utils import (
+    parse_role_result,
 )
 
 from cm_client import (
@@ -26,7 +33,6 @@ from cm_client import (
     ApiRole,
     ApiRoleList,
     ApiRoleNameList,
-    ClustersResourceApi,
     HostsResourceApi,
     RoleCommandsResourceApi,
     RolesResourceApi,
@@ -41,7 +47,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_role
 short_description: Manage a service role in cluster
 description:
@@ -135,7 +140,6 @@ attributes:
 """
 
 EXAMPLES = r"""
----
 - name: Establish a service role (auto-generated name)
   cloudera.cluster.service_role:
     host: example.cloudera.com
@@ -243,7 +247,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 role:
   description: Details about the service role.
   type: dict
@@ -366,13 +369,35 @@ role:
 """
 
 
-class ClusterServiceRole(ClouderaManagerMutableModule):
-    def __init__(self, module):
-        super(ClusterServiceRole, self).__init__(module)
+class ClusterServiceRole(
+    ServiceModuleMixin, PurgeModuleMixin, MutationModuleMixin, ClouderaManagerModule
+):
+    def __init__(self):
+        argument_spec = dict(
+            role=dict(aliases=["role_name", "name"]),
+            cluster_hostname=dict(aliases=["cluster_host"]),
+            cluster_host_id=dict(),
+            maintenance=dict(type="bool", aliases=["maintenance_mode"]),
+            tags=dict(type=dict),
+            type=dict(),
+            state=dict(
+                default="present",
+                choices=["present", "absent", "restarted", "started", "stopped"],
+            ),
+        )
+
+        mutually_exclusive = [
+            ["cluster_hostname", "cluster_host_id"],
+        ]
+
+        super().__init__(
+            argument_spec=argument_spec, mutually_exclusive=mutually_exclusive
+        )
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.role = self.get_param("role")
         self.cluster_hostname = self.get_param("cluster_hostname")
         self.cluster_host_id = self.get_param("cluster_host_id")
@@ -380,25 +405,12 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
         self.tags = self.get_param("tags")
         self.type = self.get_param("type")
         self.state = self.get_param("state")
-        self.purge = self.get_param("purge")
 
         # Initialize the return values
-        self.changed = False
-        self.diff = dict(before={}, after={})
-        self.output = {}
+        self.output["role"] = {}
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerMutableModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
         try:
             ServicesResourceApi(self.api_client).read_service(
@@ -410,34 +422,34 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
             else:
                 raise ex
 
-        api_instance = RolesResourceApi(self.api_client)
+        api = RolesResourceApi(self.api_client)
         existing = None
 
         if self.role:
             try:
-                existing = api_instance.read_role(self.cluster, self.role, self.service)
+                existing = api.read_role(self.cluster, self.role, self.service)
             except ApiException as ex:
                 if ex.status != 404:
                     raise ex
 
         if self.state == "absent":
             if existing:
-                self.changed = True
+                self.output["changed"] = True
                 if not self.module.check_mode:
-                    api_instance.delete_role(self.cluster, self.role, self.service)
+                    api.delete_role(self.cluster, self.role, self.service)
 
         elif self.state in ["present", "restarted", "started", "stopped"]:
 
             if existing:
                 if self.type and self.type != existing.type:
                     # Destroy and rebuild
-                    self.changed = True
+                    self.output["changed"] = True
 
                     if not self.module.check_mode:
-                        api_instance.delete_role(self.cluster, self.role, self.service)
+                        api.delete_role(self.cluster, self.role, self.service)
                         self.cluster_host_id = existing.host_ref.host_id
                         self.cluster_hostname = existing.host_ref.hostname
-                        self.create_role(api_instance)
+                        self.create_role(api)
                 else:
                     # Update existing
 
@@ -446,7 +458,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                         self.maintenance is not None
                         and self.maintenance != existing.maintenance_mode
                     ):
-                        self.changed = True
+                        self.output["changed"] = True
 
                         if self.module._diff:
                             self.diff["before"].update(
@@ -456,11 +468,11 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
 
                         if not self.module.check_mode:
                             if self.maintenance:
-                                maintenance_cmd = api_instance.enter_maintenance_mode(
+                                maintenance_cmd = api.enter_maintenance_mode(
                                     self.cluster, self.role, self.service
                                 )
                             else:
-                                maintenance_cmd = api_instance.exit_maintenance_mode(
+                                maintenance_cmd = api.exit_maintenance_mode(
                                     self.cluster, self.role, self.service
                                 )
 
@@ -478,7 +490,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                         )
 
                         if delta_add or delta_del:
-                            self.changed = True
+                            self.output["changed"] = True
 
                             if self.module._diff:
                                 self.diff["before"].update(tags=delta_del)
@@ -486,7 +498,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
 
                             if not self.module.check_mode:
                                 if delta_del:
-                                    api_instance.delete_tags(
+                                    api.delete_tags(
                                         self.cluster,
                                         self.role,
                                         self.service,
@@ -496,7 +508,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                                         ],
                                     )
                                 if delta_add:
-                                    api_instance.add_tags(
+                                    api.add_tags(
                                         self.cluster,
                                         self.role,
                                         self.service,
@@ -509,7 +521,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                     # TODO Config
 
                     if self.state == "started" and existing.role_state != "STARTED":
-                        self.changed = True
+                        self.output["changed"] = True
 
                         if self.module._diff:
                             self.diff["before"].update(role_state=existing.role_state)
@@ -522,7 +534,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                         "STOPPED",
                         "NA",
                     ]:
-                        self.changed = True
+                        self.output["changed"] = True
 
                         if self.module._diff:
                             self.diff["before"].update(role_state=existing.role_state)
@@ -532,7 +544,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                             self.stop_role(self.role)
 
                     elif self.state == "restarted":
-                        self.changed = True
+                        self.output["changed"] = True
 
                         if self.module._diff:
                             self.diff["before"].update(role_state=existing.role_state)
@@ -555,22 +567,22 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                                 # Not in parallel, but should only be a single command
                                 self.wait_command(c)
 
-                    if self.changed:
-                        self.output = parse_role_result(
-                            api_instance.read_role(
+                    if self.output["changed"]:
+                        self.output["role"] = parse_role_result(
+                            api.read_role(
                                 self.cluster, self.role, self.service, view="full"
                             )
                         )
                     else:
-                        self.output = parse_role_result(existing)
+                        self.output["role"] = parse_role_result(existing)
             else:
                 # Role doesn't exist
-                self.create_role(api_instance)
+                self.create_role(api)
 
         else:
             self.module.fail_json(msg=f"Invalid state: {self.state}")
 
-    def create_role(self, api_instance):
+    def create_role(self, api):
         missing_params = []
 
         if self.type is None:
@@ -625,7 +637,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
 
         # TODO Config
 
-        self.changed = True
+        self.output["changed"] = True
 
         if self.module._diff:
             self.diff = dict(
@@ -637,7 +649,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
             created_role = next(
                 (
                     iter(
-                        api_instance.create_roles(
+                        api.create_roles(
                             self.cluster,
                             self.service,
                             body=ApiRoleList([payload]),
@@ -656,7 +668,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                 if self.module._diff:
                     self.diff["after"].update(maintenance_mode=True)
 
-                maintenance_cmd = api_instance.enter_maintenance_mode(
+                maintenance_cmd = api.enter_maintenance_mode(
                     self.cluster, created_role.name, self.service
                 )
 
@@ -674,8 +686,8 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                 self.stop_role(created_role.name)
 
             if refresh:
-                self.output = parse_role_result(
-                    api_instance.read_role(
+                self.output["role"] = parse_role_result(
+                    api.read_role(
                         self.cluster,
                         created_role.name,
                         self.service,
@@ -683,7 +695,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
                     )
                 )
             else:
-                self.output = parse_role_result(created_role)
+                self.output["role"] = parse_role_result(created_role)
 
     def start_role(self, role_name: str):
         start_cmds = RoleCommandsResourceApi(self.api_client).start_command(
@@ -717,43 +729,7 @@ class ClusterServiceRole(ClouderaManagerMutableModule):
 
 
 def main():
-    module = ClouderaManagerMutableModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name"]),
-            role=dict(aliases=["role_name", "name"]),
-            cluster_hostname=dict(aliases=["cluster_host"]),
-            cluster_host_id=dict(),
-            maintenance=dict(type="bool", aliases=["maintenance_mode"]),
-            tags=dict(type=dict),
-            purge=dict(type="bool", default=False),
-            type=dict(),
-            state=dict(
-                default="present",
-                choices=["present", "absent", "restarted", "started", "stopped"],
-            ),
-        ),
-        mutually_exclusive=[
-            ["cluster_hostname", "cluster_host_id"],
-        ],
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceRole(module)
-
-    output = dict(
-        changed=result.changed,
-        role=result.output,
-    )
-
-    if module._diff:
-        output.update(diff=result.diff)
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceRole().execute()
 
 
 if __name__ == "__main__":

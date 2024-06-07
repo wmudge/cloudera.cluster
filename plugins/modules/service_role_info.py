@@ -18,10 +18,15 @@ import json
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
+)
+from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
+    ServiceModuleMixin,
+)
+from ansible_collections.cloudera.cluster.plugins.module_utils.role_utils import (
     parse_role_result,
 )
 
-from cm_client import ClustersResourceApi, RolesResourceApi, ServicesResourceApi
+from cm_client import RolesResourceApi, ServicesResourceApi
 from cm_client.rest import ApiException
 
 ANSIBLE_METADATA = {
@@ -31,7 +36,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_role_info
 short_description: Retrieve information about the service roles of cluster
 description:
@@ -102,7 +106,6 @@ extends_documentation_fragment:
 """
 
 EXAMPLES = r"""
----
 - name: Gather details of the roles for the 'yarn' service
   cloudera.cluster.service_role_info:
     host: "example.cloudera.host"
@@ -140,7 +143,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 roles:
   description: Details about the roles of cluster service.
   type: list
@@ -264,13 +266,36 @@ roles:
 """
 
 
-class ClusterServiceRoleInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClusterServiceRoleInfo, self).__init__(module)
+class ClusterServiceRoleInfo(ServiceModuleMixin, ClouderaManagerModule):
+    def __init__(self):
+        argument_spec = dict(
+            role=dict(aliases=["role_name", "name"]),
+            cluster_hostname=dict(aliases=["cluster_host"]),
+            cluster_host_id=dict(),
+            type=dict(aliases=["role_type"]),
+            view=dict(
+                default="summary",
+                choices=["summary", "full", "healthcheck", "export", "redacted"],
+            ),
+        )
+
+        mutually_exclusive = [
+            ["role", "cluster_hostname"],
+            ["role", "cluster_host_id"],
+            ["role", "type"],
+            ["cluster_hostname", "cluster_host_id"],
+        ]
+
+        super().__init__(
+            argument_spec=argument_spec,
+            mutually_exclusive=mutually_exclusive,
+            supports_check_mode=True,
+        )
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.role = self.get_param("role")
         self.type = self.get_param("type")
         self.cluster_hostname = self.get_param("cluster_hostname")
@@ -278,20 +303,10 @@ class ClusterServiceRoleInfo(ClouderaManagerModule):
         self.view = self.get_param("view")
 
         # Initialize the return values
-        self.roles = []
+        self.output["roles"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
         try:
             ServicesResourceApi(self.api_client).read_service(
@@ -303,7 +318,7 @@ class ClusterServiceRoleInfo(ClouderaManagerModule):
             else:
                 raise ex
 
-        api_instance = RolesResourceApi(self.api_client)
+        api = RolesResourceApi(self.api_client)
 
         if self.view == "healthcheck":
             self.view = "full_with_health_check_explanation"
@@ -312,9 +327,9 @@ class ClusterServiceRoleInfo(ClouderaManagerModule):
 
         if self.role:
             try:
-                self.roles.append(
+                self.output["roles"].append(
                     parse_role_result(
-                        api_instance.read_role(
+                        api.read_role(
                             cluster_name=self.cluster,
                             role_name=self.role,
                             service_name=self.service,
@@ -338,9 +353,9 @@ class ClusterServiceRoleInfo(ClouderaManagerModule):
                 ]
             )
 
-            self.roles = [
+            self.output["roles"] = [
                 parse_role_result(s)
-                for s in api_instance.read_roles(
+                for s in api.read_roles(
                     cluster_name=self.cluster,
                     service_name=self.service,
                     view=self.view,
@@ -348,49 +363,16 @@ class ClusterServiceRoleInfo(ClouderaManagerModule):
                 ).items
             ]
         else:
-            self.roles = [
+            self.output["roles"] = [
                 parse_role_result(s)
-                for s in api_instance.read_roles(
+                for s in api.read_roles(
                     cluster_name=self.cluster, service_name=self.service, view=self.view
                 ).items
             ]
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name"]),
-            role=dict(aliases=["role_name", "name"]),
-            cluster_hostname=dict(aliases=["cluster_host"]),
-            cluster_host_id=dict(),
-            type=dict(aliases=["role_type"]),
-            view=dict(
-                default="summary",
-                choices=["summary", "full", "healthcheck", "export", "redacted"],
-            ),
-        ),
-        mutually_exclusive=[
-            ["role", "cluster_hostname"],
-            ["role", "cluster_host_id"],
-            ["role", "type"],
-            ["cluster_hostname", "cluster_host_id"],
-        ],
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceRoleInfo(module)
-
-    output = dict(
-        changed=False,
-        roles=result.roles,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceRoleInfo().execute()
 
 
 if __name__ == "__main__":
