@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright 2023 Cloudera, Inc. All Rights Reserved.
+# Copyright 2024 Cloudera, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,38 +19,44 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import logging
+import os
 import pytest
 
 from ansible_collections.cloudera.cluster.plugins.modules import cm_endpoint_info
 from ansible_collections.cloudera.cluster.tests.unit import (
     AnsibleExitJson,
-    AnsibleFailJson,
 )
-
-from cm_client.rest import RESTClientObject
-from urllib3.response import HTTPResponse
 
 LOG = logging.getLogger(__name__)
 
 
-def test_host_discovery(module_args, monkeypatch):
-    spec = {
-        "username": "testuser",
-        "password": "testpassword",
-        "host": "test.cldr.info",
-        "port": "7180",
+@pytest.fixture
+def conn():
+    conn = dict(username=os.getenv("CM_USERNAME"), password=os.getenv("CM_PASSWORD"))
+
+    if os.getenv("CM_HOST", None):
+        conn.update(host=os.getenv("CM_HOST"))
+
+    if os.getenv("CM_PORT", None):
+        conn.update(port=os.getenv("CM_PORT"))
+
+    if os.getenv("CM_ENDPOINT", None):
+        conn.update(url=os.getenv("CM_ENDPOINT"))
+
+    if os.getenv("CM_PROXY", None):
+        conn.update(proxy=os.getenv("CM_PROXY"))
+
+    return {
+        **conn,
         "verify_tls": "no",
         "debug": "yes",
     }
 
-    def response():
-        return HTTPResponse()
 
-    monkeypatch.setattr("urllib3.HTTPConnectionPool.urlopen", response)
-
-    module_args(spec)
+def test_host_discovery(module_args, conn):
+    module_args(conn)
 
     with pytest.raises(AnsibleExitJson) as e:
         cm_endpoint_info.main()
 
-    assert e.value.endpoint == f"https://{spec['host']}:7183/api/v01"
+    assert e.value.endpoint == f"https://{os.getenv('CM_HOST')}:7183/api/v54"

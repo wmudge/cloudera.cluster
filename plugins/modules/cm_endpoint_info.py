@@ -1,4 +1,6 @@
-# Copyright 2023 Cloudera, Inc. All Rights Reserved.
+# -*- coding: utf-8 -*-
+
+# Copyright 2024 Cloudera, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +25,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: cm_endpoint_info
 short_description: Discover the Cloudera Manager API endpoint
 description:
@@ -38,7 +39,6 @@ extends_documentation_fragment:
 """
 
 EXAMPLES = r"""
----
 # This will first try 'http://example.cloudera.com:7180' and will
 # follow any redirects
 - name: Gather details using auto-discovery
@@ -50,7 +50,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 endpoint:
     description: The discovered Cloudera Manager API endpoint
     type: str
@@ -59,35 +58,19 @@ endpoint:
 
 
 class ClouderaEndpointInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClouderaEndpointInfo, self).__init__(module)
+    def __init__(self):
+        super().__init__(supports_check_mode=True)
 
-        # Initialize the return values
-        self.endpoint = ""
+    def prepare(self):
+        super().prepare()
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        self.endpoint = self.api_client.host
+        super().process()
+        self.output["endpoint"] = self.api_client.host
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module_internal(supports_check_mode=True)
-
-    result = ClouderaEndpointInfo(module)
-
-    output = dict(
-        changed=False,
-        endpoint=result.endpoint,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClouderaEndpointInfo().execute()
 
 
 if __name__ == "__main__":
