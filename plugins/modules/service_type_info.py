@@ -44,6 +44,7 @@ options:
     required: yes
     aliases:
       - cluster_name
+      - name
 extends_documentation_fragment:
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint

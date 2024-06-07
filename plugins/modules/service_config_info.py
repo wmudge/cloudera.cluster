@@ -41,18 +41,11 @@ author:
 requirements:
   - cm_client
 options:
-  cluster:
-    description:
-      - The cluster to examine.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
   service:
     description:
-      - The service to examine.
-      - If the service does not exist, the module will return an empty result.
+      - The service to manage.
     type: str
+    required: yes
     aliases:
       - service_name
       - name
@@ -62,11 +55,12 @@ options:
     type: str
     default: summary
     choices:
-        - summary
-        - full
+      - summary
+      - full
 extends_documentation_fragment:
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.cluster
 """
 
 EXAMPLES = r"""

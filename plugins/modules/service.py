@@ -49,16 +49,9 @@ author:
 requirements:
   - cm-client
 options:
-  cluster:
-    description:
-      - The associated cluster.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
   service:
     description:
-      - The service.
+      - The service to manage.
     type: str
     required: yes
     aliases:
@@ -86,12 +79,6 @@ options:
     type: str
     aliases:
       - service_type
-  purge:
-    description:
-      - Flag for whether the declared service tags should append or overwrite any existing tags.
-      - To clear all tags, set I(tags={}), i.e. an empty dictionary, and I(purge=True).
-    type: bool
-    default: False
   state:
     description:
       - The state of the service.
@@ -109,6 +96,7 @@ extends_documentation_fragment:
   - cloudera.cluster.cm_endpoint
   - cloudera.cluster.purge
   - cloudera.cluster.mutation
+  - cloudera.cluster.cluster
 attributes:
   check_mode:
     support: full
