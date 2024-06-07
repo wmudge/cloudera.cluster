@@ -17,11 +17,12 @@
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
 )
+from ansible_collections.cloudera.cluster.plugins.module_utils.role_utils import (
+    RoleModuleMixin,
+)
 
 from cm_client import (
-    ClustersResourceApi,
     RolesResourceApi,
-    ServicesResourceApi,
 )
 from cm_client.rest import ApiException
 
@@ -32,7 +33,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_role_config_info
 short_description: Retrieve information about the configuration for a cluster service role
 description:
@@ -42,20 +42,6 @@ author:
 requirements:
   - cm_client
 options:
-  cluster:
-    description:
-      - The cluster to examine.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
-  service:
-    description:
-      - The service to examine.
-    type: str
-    required: yes
-    aliases:
-      - service_name
   role:
     description:
       - The role to examine.
@@ -76,10 +62,11 @@ options:
 extends_documentation_fragment:
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.cluster
+  - cloudera.cluster.service
 """
 
 EXAMPLES = r"""
----
 - name: Gather the configuration details for a cluster service role
   cloudera.cluster.service_role_config_info:
     host: "example.cloudera.internal"
@@ -101,7 +88,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 config:
   description:
     - List of service role configurations.
@@ -180,84 +166,47 @@ config:
 """
 
 
-class ClusterServiceRoleConfigInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClusterServiceRoleConfigInfo, self).__init__(module)
+class ClusterServiceRoleConfigInfo(RoleModuleMixin, ClouderaManagerModule):
+    def __init__(self):
+        argument_spec = dict(
+            role=dict(required=True, aliases=["role_name", "name"]),
+            view=dict(
+                default="summary",
+                choices=["summary", "full"],
+            ),
+        )
+
+        super().__init__(argument_spec=argument_spec)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.role = self.get_param("role")
         self.view = self.get_param("view")
 
         # Initialize the return values
-        self.config = []
+        self.output["config"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
         try:
-            ServicesResourceApi(self.api_client).read_service(
-                self.cluster, self.service
-            )
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Service does not exist: " + self.service)
-            else:
-                raise ex
-
-        api_instance = RolesResourceApi(self.api_client)
-
-        try:
-            results = api_instance.read_role_config(
+            results = RolesResourceApi(self.api_client).read_role_config(
                 cluster_name=self.cluster,
                 role_name=self.role,
                 service_name=self.service,
                 view=self.view,
             )
 
-            self.config = [s.to_dict() for s in results.items]
+            self.output["config"] = [s.to_dict() for s in results.items]
         except ApiException as e:
             if e.status != 404:
                 raise e
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name"]),
-            role=dict(required=True, aliases=["role_name", "name"]),
-            view=dict(
-                default="summary",
-                choices=["summary", "full"],
-            ),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceRoleConfigInfo(module)
-
-    output = dict(
-        changed=False,
-        config=result.config,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceRoleConfigInfo().execute()
 
 
 if __name__ == "__main__":
