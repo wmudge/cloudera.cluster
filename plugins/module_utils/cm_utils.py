@@ -36,7 +36,6 @@ from cm_client import (
     ApiClient,
     ApiCommand,
     ApiConfigList,
-    ApiRole,
     ApiRoleConfigGroup,
     Configuration,
 )
@@ -47,24 +46,6 @@ from cm_client.apis.commands_resource_api import CommandsResourceApi
 
 __credits__ = ["frisch@cloudera.com"]
 __maintainer__ = ["wmudge@cloudera.com"]
-
-ROLE_OUTPUT = [
-    "commission_state",
-    "config_staleness_status",
-    "ha_status",
-    "health_checks",
-    "health_summary",
-    # "host_ref",
-    "maintenance_mode",
-    "maintenance_owners",
-    "name",
-    # "role_config_group_ref",
-    "role_state",
-    # "service_ref",
-    "tags",
-    "type",
-    "zoo_keeper_server_mode",
-]
 
 ROLE_CONFIG_GROUP = [
     "name",
@@ -83,17 +64,6 @@ def _parse_output(entity: dict, filter: list) -> dict:
         else:
             output[k] = entity[k]
 
-    return output
-
-
-def parse_role_result(role: ApiRole) -> dict:
-    # Retrieve only the host_id, role_config_group, and service identifiers
-    output = dict(
-        host_id=role.host_ref.host_id,
-        role_config_group_name=role.role_config_group_ref.role_config_group_name,
-        service_name=role.service_ref.service_name,
-    )
-    output.update(_parse_output(role.to_dict(), ROLE_OUTPUT))
     return output
 
 
@@ -425,7 +395,6 @@ class ClouderaManagerModule(object):
         self.prepare()
 
     def execute(self):
-        # Execute process() chain
         def _decorate_output(result):
             if self.debug:
                 log = self.log_capture.getvalue()
@@ -438,6 +407,8 @@ class ClouderaManagerModule(object):
 
         try:
             self.initialize_client()
+
+            # Execute process() chain
             self.process()
         except ApiException as ae:
             err = dict(
@@ -672,7 +643,7 @@ class ClouderaManagerModule(object):
         )
 
 
-class MutableModuleMixin(ClouderaManagerModule):
+class MutationModuleMixin(ClouderaManagerModule):
     def __init__(self, *args, argument_spec={}, **kwargs):
         argument_spec.update(
             message=dict(default="Managed by Ansible", aliases=["msg"]),
@@ -684,6 +655,21 @@ class MutableModuleMixin(ClouderaManagerModule):
     def prepare(self):
         super().prepare()
         self.message = self.get_param("message")
+
+    def process(self):
+        super().process()
+
+
+class PurgeModuleMixin(ClouderaManagerModule):
+    def __init__(self, *args, argument_spec={}, **kwargs):
+        argument_spec.update(
+            purge=dict(type="bool", default=False),
+        )
+        super().__init__(*args, argument_spec=argument_spec, **kwargs)
+
+    def prepare(self):
+        super().prepare()
+        self.purge = self.get_param("purge")
 
     def process(self):
         super().process()
