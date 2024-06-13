@@ -27,7 +27,7 @@
   , "enableKerberos": {
     {%- if cluster.security.tls | default(false) -%}
     "datanodeTransceiverPort": 9866,
-    "datanodeWebPort": 9864
+    "datanodeWebPort": 1006
     {%- else -%}
     "datanodeTransceiverPort": 1004,
     "datanodeWebPort": 1006

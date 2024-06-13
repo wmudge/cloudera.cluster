@@ -1,9 +1,5 @@
 {%- set log_base = cluster.log_base | default('/var/log') | regex_replace('/$','') -%}
 ---
-ATLAS:
-  ATLAS_SERVER:
-    ranger_atlas_plugin_hdfs_audit_spool_directory: "{{ log_base }}/atlas/audit/hdfs/spool"
-    ranger_atlas_plugin_solr_audit_spool_directory: "{{ log_base }}/atlas/audit/solr/spool"
 DAS:
   DAS_WEBAPP:
     ranger_hive_plugin_hdfs_audit_spool_directory: "{{ log_base }}/hive/audit/hdfs/spool"
@@ -36,17 +32,12 @@ INFRA_SOLR:
   SERVICEWIDE:
     ranger_audit_hdfs_spool_dir: "{{ log_base }}/solr-infra/audit/hdfs/spool"
     ranger_audit_solr_spool_dir: "{{ log_base }}/solr-infra/audit/solr/spool"
-KAFKA:
-  KAFKA_BROKER:
-    ranger_kafka_plugin_hdfs_audit_spool_directory: "{{ log_base }}/kafka/audit/hdfs/spool"
-    ranger_kafka_plugin_solr_audit_spool_directory: "{{ log_base }}/kafka/audit/solr/spool"
 KNOX:
   KNOX_GATEWAY:
     gateway_ranger_knox_plugin_hdfs_audit_spool_directory: "{{ log_base }}/knox/gateway/audit/hdfs/spool"
     gateway_ranger_knox_plugin_solr_audit_spool_directory: "{{ log_base }}/knox/gateway/audit/solr/spool"
 OZONE:
   OZONE_MANAGER:
-    ozone.log.dir: "{{ log_base }}/hadoop-ozone"
     ranger_ozone_plugin_solr_audit_spool_directory: "{{ log_base }}/hadoop-ozone/ranger-audit/solr/spool"
 RANGER:
   RANGER_ADMIN:
