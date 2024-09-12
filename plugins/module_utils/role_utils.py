@@ -13,16 +13,17 @@
 # limitations under the License.
 
 """
-A common functions for Cloudera Manager role management
+A common functions for Cloudera Manager role and role group management
 """
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
-    _parse_output,
+    parse_output,
 )
 
 from cm_client import (
     ApiRole,
+    ApiRoleConfigGroup,
     ClustersResourceApi,
     ServicesResourceApi,
 )
@@ -46,6 +47,14 @@ ROLE_OUTPUT = [
     "zoo_keeper_server_mode",
 ]
 
+ROLE_CONFIG_GROUP = [
+    "name",
+    "role_type",
+    "base",
+    "display_name",
+    # "service_ref",
+]
+
 
 def parse_role_result(role: ApiRole) -> dict:
     # Retrieve only the host_id, role_config_group, and service identifiers
@@ -54,7 +63,14 @@ def parse_role_result(role: ApiRole) -> dict:
         role_config_group_name=role.role_config_group_ref.role_config_group_name,
         service_name=role.service_ref.service_name,
     )
-    output.update(_parse_output(role.to_dict(), ROLE_OUTPUT))
+    output.update(parse_output(role.to_dict(), ROLE_OUTPUT))
+    return output
+
+
+def parse_role_config_group_result(role_config_group: ApiRoleConfigGroup) -> dict:
+    # Retrieve only the service identifier
+    output = dict(service_name=role_config_group.service_ref.service_name)
+    output.update(parse_output(role_config_group.to_dict(), ROLE_CONFIG_GROUP))
     return output
 
 
