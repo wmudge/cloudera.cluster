@@ -52,6 +52,12 @@ def parse_service_result(service: ApiService) -> dict:
 
 
 class ServiceModuleMixin(ClouderaManagerModule):
+    """Module mixin to handle common service dependencies.
+
+    Be sure to add the following doc_fragments:
+    * cloudera.cluster.cluster
+    """
+
     def __init__(self, *args, argument_spec={}, **kwargs):
         argument_spec.update(
             cluster=dict(required=True, aliases=["cluster_name"]),
