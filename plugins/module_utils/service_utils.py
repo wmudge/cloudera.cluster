@@ -18,7 +18,7 @@ A common functions for Cloudera Manager service management
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
-    _parse_output,
+    parse_output,
 )
 
 from cm_client import (
@@ -47,7 +47,7 @@ SERVICE_OUTPUT = [
 def parse_service_result(service: ApiService) -> dict:
     # Retrieve only the cluster_name
     output = dict(cluster_name=service.cluster_ref.cluster_name)
-    output.update(_parse_output(service.to_dict(), SERVICE_OUTPUT))
+    output.update(parse_output(service.to_dict(), SERVICE_OUTPUT))
     return output
 
 
