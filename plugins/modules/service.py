@@ -16,7 +16,8 @@
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
-    MutableModuleMixin,
+    MutationModuleMixin,
+    PurgeModuleMixin,
     resolve_tag_updates,
 )
 from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
@@ -106,6 +107,8 @@ extends_documentation_fragment:
   - ansible.builtin.action_common_attributes
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.purge
+  - cloudera.cluster.mutation
 attributes:
   check_mode:
     support: full
@@ -317,7 +320,9 @@ service:
 """
 
 
-class ClusterService(ServiceModuleMixin, MutableModuleMixin, ClouderaManagerModule):
+class ClusterService(
+    ServiceModuleMixin, PurgeModuleMixin, MutationModuleMixin, ClouderaManagerModule
+):
     def __init__(self):
         argument_spec = dict(
             maintenance=dict(type="bool", aliases=["maintenance_mode"]),
