@@ -93,7 +93,7 @@ def test_present_invalid_cluster(conn, module_args):
 def test_present_missing_type(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
     )
     module_args(conn)
 
@@ -104,7 +104,7 @@ def test_present_missing_type(conn, module_args):
 def test_present_create_service(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         display_name="Example Service",
         type="ZOOKEEPER",
     )
@@ -124,7 +124,7 @@ def test_present_create_service(conn, module_args):
 def test_present_update_service(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         display_name="Example Service by Ansible",
     )
     module_args(conn)
@@ -143,7 +143,7 @@ def test_present_update_service(conn, module_args):
 def test_present_maintenance_mode(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         maintenance="yes",
     )
     module_args(conn)
@@ -179,7 +179,7 @@ def test_present_maintenance_mode(conn, module_args):
 def test_present_set_tags(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         tags=dict(
             test="Ansible", key="Value", empty_string="", blank_string="  ", none=None
         ),
@@ -207,7 +207,7 @@ def test_present_set_tags(conn, module_args):
 def test_present_append_tags(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         tags=dict(more="Tags", key="Value"),
     )
     module_args(conn)
@@ -262,7 +262,7 @@ def test_update_tags_check_mode(conn, module_args):
 def test_present_purge_tags(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         tags=dict(purge="Ansible"),
         purge=True,
     )
@@ -319,7 +319,7 @@ def test_stopped(conn, module_args):
 def test_absent(conn, module_args):
     conn.update(
         cluster=os.getenv("CM_CLUSTER"),
-        service=os.getenv("CM_SERVICE"),
+        service="test_zk",
         state="absent",
     )
     module_args(conn)

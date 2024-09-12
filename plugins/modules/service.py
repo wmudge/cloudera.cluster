@@ -15,18 +15,19 @@
 # limitations under the License.
 
 from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
-    ClouderaManagerMutableModule,
+    ClouderaManagerModule,
+    MutableModuleMixin,
     resolve_tag_updates,
 )
 from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
     parse_service_result,
+    ServiceModuleMixin,
 )
 
 from cm_client import (
     ApiEntityTag,
     ApiService,
     ApiServiceList,
-    ClustersResourceApi,
     ServicesResourceApi,
 )
 from cm_client.rest import ApiException
@@ -316,52 +317,48 @@ service:
 """
 
 
-class ClusterService(ClouderaManagerMutableModule):
-    def __init__(self, module):
-        super(ClusterService, self).__init__(module)
+class ClusterService(ServiceModuleMixin, MutableModuleMixin, ClouderaManagerModule):
+    def __init__(self):
+        argument_spec = dict(
+            maintenance=dict(type="bool", aliases=["maintenance_mode"]),
+            display_name=dict(),
+            tags=dict(type=dict),
+            type=dict(aliases=["service_type"]),
+            state=dict(
+                default="present", choices=["present", "absent", "started", "stopped"]
+            ),
+        )
+
+        super().__init__(argument_spec=argument_spec)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.maintenance = self.get_param("maintenance")
         self.display_name = self.get_param("display_name")
         self.tags = self.get_param("tags")
         self.type = self.get_param("type")
         self.state = self.get_param("state")
-        self.purge = self.get_param("purge")
 
         # Initialize the return values
-        self.changed = False
-        self.diff = dict(before={}, after={})
-        self.output = {}
+        self.output["service"] = {}
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerMutableModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
-        api_instance = ServicesResourceApi(self.api_client)
+        api = ServicesResourceApi(self.api_client)
         existing = None
 
         try:
-            existing = api_instance.read_service(
-                self.cluster, self.service, view="full"
-            )
+            existing = api.read_service(self.cluster, self.service, view="full")
         except ApiException as ex:
             if ex.status != 404:
                 raise ex
 
         if self.state == "absent":
             if existing:
-                api_instance.delete_service(self.cluster, self.service)
+                api.delete_service(self.cluster, self.service)
 
         elif self.state in ["present", "started", "stopped"]:
             if existing:
@@ -371,7 +368,7 @@ class ClusterService(ClouderaManagerMutableModule):
                     self.maintenance is not None
                     and self.maintenance != existing.maintenance_mode
                 ):
-                    self.changed = True
+                    self.output["changed"] = True
 
                     if self.module._diff:
                         self.diff["before"].update(
@@ -381,11 +378,11 @@ class ClusterService(ClouderaManagerMutableModule):
 
                     if not self.module.check_mode:
                         if self.maintenance:
-                            maintenance_cmd = api_instance.enter_maintenance_mode(
+                            maintenance_cmd = api.enter_maintenance_mode(
                                 self.cluster, self.service
                             )
                         else:
-                            maintenance_cmd = api_instance.exit_maintenance_mode(
+                            maintenance_cmd = api.exit_maintenance_mode(
                                 self.cluster, self.service
                             )
 
@@ -401,7 +398,7 @@ class ClusterService(ClouderaManagerMutableModule):
                     )
 
                     if delta_add or delta_del:
-                        self.changed = True
+                        self.output["changed"] = True
 
                         if self.module._diff:
                             self.diff["before"].update(tags=delta_del)
@@ -409,7 +406,7 @@ class ClusterService(ClouderaManagerMutableModule):
 
                         if not self.module.check_mode:
                             if delta_del:
-                                api_instance.delete_tags(
+                                api.delete_tags(
                                     self.cluster,
                                     self.service,
                                     body=[
@@ -417,7 +414,7 @@ class ClusterService(ClouderaManagerMutableModule):
                                     ],
                                 )
                             if delta_add:
-                                api_instance.add_tags(
+                                api.add_tags(
                                     self.cluster,
                                     self.service,
                                     body=[
@@ -435,19 +432,19 @@ class ClusterService(ClouderaManagerMutableModule):
                     delta.update(display_name=self.display_name)
 
                 if delta:
-                    self.changed = True
+                    self.output["changed"] = True
 
                     if self.module._diff:
                         self.diff["before"].update(display_name=existing.display_name)
                         self.diff["after"].update(display_name=self.display_name)
 
                     if not self.module.check_mode:
-                        api_instance.update_service(
+                        api.update_service(
                             self.cluster, self.service, body=ApiService(**delta)
                         )
 
                 if self.state == "started" and existing.service_state != "STARTED":
-                    self.changed = True
+                    self.output["changed"] = True
 
                     if self.module._diff:
                         self.diff["before"].update(service_state=existing.service_state)
@@ -455,37 +452,31 @@ class ClusterService(ClouderaManagerMutableModule):
 
                     if not self.module.check_mode:
                         if existing.service_state == "NA":
-                            self.wait_command(
-                                api_instance.first_run(self.cluster, self.service)
-                            )
+                            self.wait_command(api.first_run(self.cluster, self.service))
                         else:
                             self.wait_command(
-                                api_instance.start_command(self.cluster, self.service)
+                                api.start_command(self.cluster, self.service)
                             )
 
                 elif self.state == "stopped" and existing.service_state not in [
                     "STOPPED",
                     "NA",
                 ]:
-                    self.changed = True
+                    self.output["changed"] = True
 
                     if self.module._diff:
                         self.diff["before"].update(service_state=existing.service_state)
                         self.diff["after"].update(service_state="STOPPED")
 
                     if not self.module.check_mode:
-                        self.wait_command(
-                            api_instance.stop_command(self.cluster, self.service)
-                        )
+                        self.wait_command(api.stop_command(self.cluster, self.service))
 
-                if self.changed:
-                    self.output = parse_service_result(
-                        api_instance.read_service(
-                            self.cluster, self.service, view="full"
-                        )
+                if self.output["changed"]:
+                    self.output["service"] = parse_service_result(
+                        api.read_service(self.cluster, self.service, view="full")
                     )
                 else:
-                    self.output = parse_service_result(existing)
+                    self.output["service"] = parse_service_result(existing)
             else:
 
                 # Service doesn't exist
@@ -501,7 +492,7 @@ class ClusterService(ClouderaManagerMutableModule):
 
                 service_list = ApiServiceList([ApiService(**payload)])
 
-                self.changed = True
+                self.output["changed"] = True
 
                 if self.module._diff:
                     self.diff = dict(
@@ -510,52 +501,20 @@ class ClusterService(ClouderaManagerMutableModule):
                     )
 
                 if not self.module.check_mode:
-                    api_instance.create_services(self.cluster, body=service_list)
+                    api.create_services(self.cluster, body=service_list)
 
                     if self.state == "started":
-                        self.wait_command(
-                            api_instance.first_run(self.cluster, self.service)
-                        )
+                        self.wait_command(api.first_run(self.cluster, self.service))
 
-                self.output = parse_service_result(
-                    api_instance.read_service(self.cluster, self.service, view="full")
+                self.output["service"] = parse_service_result(
+                    api.read_service(self.cluster, self.service, view="full")
                 )
         else:
             self.module.fail_json(msg=f"Invalid state: {self.state}")
 
 
 def main():
-    module = ClouderaManagerMutableModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name", "name"]),
-            maintenance=dict(type="bool", aliases=["maintenance_mode"]),
-            display_name=dict(),
-            tags=dict(type=dict),
-            purge=dict(type="bool", default=False),
-            type=dict(aliases=["service_type"]),
-            state=dict(
-                default="present", choices=["present", "absent", "started", "stopped"]
-            ),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterService(module)
-
-    output = dict(
-        changed=result.changed,
-        service=result.output,
-    )
-
-    if module._diff:
-        output.update(diff=result.diff)
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterService().execute()
 
 
 if __name__ == "__main__":
