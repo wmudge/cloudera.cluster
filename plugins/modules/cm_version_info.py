@@ -1,4 +1,4 @@
-# Copyright 2023 Cloudera, Inc. All Rights Reserved.
+# Copyright 2024 Cloudera, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,36 +89,23 @@ cloudera_manager:
 
 
 class ClouderaManagerVersionInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClouderaManagerVersionInfo, self).__init__(module)
+    def __init__(self):
+        super().__init__(supports_check_mode=True)
 
-        # Initialize the return values
-        self.version = dict()
+    def prepare(self):
+        super().prepare()
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        api_instance = ClouderaManagerResourceApi(self.api_client)
-        self.version = api_instance.get_version().to_dict()
+        super().process()
+
+        # Execute the module logic and set the output field
+        self.output["cloudera_manager"] = (
+            ClouderaManagerResourceApi(self.api_client).get_version().to_dict()
+        )
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(supports_check_mode=True)
-
-    result = ClouderaManagerVersionInfo(module)
-
-    output = dict(
-        changed=False,
-        cloudera_manager=result.version,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClouderaManagerVersionInfo().execute()
 
 
 if __name__ == "__main__":
