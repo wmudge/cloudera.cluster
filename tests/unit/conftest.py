@@ -52,12 +52,12 @@ def patch_module(monkeypatch):
     """Patch AnsibleModule to raise exceptions on success and failure"""
 
     def exit_json(*args, **kwargs):
-        if "changed" not in kwargs:
-            kwargs["changed"] = False
+        # if "output" not in kwargs and "changed" not in kwargs["output"]:
+        #     kwargs["output"]["changed"] = False
         raise AnsibleExitJson(kwargs)
 
     def fail_json(*args, **kwargs):
-        kwargs["failed"] = True
+        # kwargs["failed"] = True
         raise AnsibleFailJson(kwargs)
 
     monkeypatch.setattr(basic.AnsibleModule, "exit_json", exit_json)
