@@ -50,13 +50,6 @@ author:
 requirements:
   - cm-client
 options:
-  cluster:
-    description:
-      - The associated cluster.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
   service:
     description:
       - The service to manage.
@@ -87,6 +80,7 @@ extends_documentation_fragment:
   - cloudera.cluster.cm_endpoint
   - cloudera.cluster.purge
   - cloudera.cluster.message
+  - cloudera.cluster.cluster
 attributes:
   check_mode:
     support: full

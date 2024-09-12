@@ -41,13 +41,6 @@ author:
 requirements:
   - cm_client
 options:
-  cluster:
-    description:
-      - The cluster to examine.
-    type: str
-    required: yes
-    aliases:
-      - cluster_name
   service:
     description:
       - A service to retrieve.
@@ -72,6 +65,7 @@ options:
 extends_documentation_fragment:
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.cluster
 """
 
 EXAMPLES = r"""
