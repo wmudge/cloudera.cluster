@@ -18,10 +18,11 @@ from ansible_collections.cloudera.cluster.plugins.module_utils.cm_utils import (
     ClouderaManagerModule,
 )
 
-from cm_client import (
-    ClustersResourceApi,
-    ServicesResourceApi,
+from ansible_collections.cloudera.cluster.plugins.module_utils.service_utils import (
+    ServiceModuleMixin,
 )
+
+from cm_client import ServicesResourceApi
 from cm_client.rest import ApiException
 
 ANSIBLE_METADATA = {
@@ -31,7 +32,6 @@ ANSIBLE_METADATA = {
 }
 
 DOCUMENTATION = r"""
----
 module: service_config_info
 short_description: Retrieve information about the configuration for a cluster service
 description:
@@ -70,7 +70,6 @@ extends_documentation_fragment:
 """
 
 EXAMPLES = r"""
----
 - name: Gather the configuration details for a cluster service
   cloudera.cluster.service_config_info:
     host: "example.cloudera.host"
@@ -90,7 +89,6 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
 config:
   description: Service-wide configuration details about a cluster service.
   type: list
@@ -170,69 +168,44 @@ config:
 """
 
 
-class ClusterServiceConfigInfo(ClouderaManagerModule):
-    def __init__(self, module):
-        super(ClusterServiceConfigInfo, self).__init__(module)
+class ClusterServiceConfigInfo(ServiceModuleMixin, ClouderaManagerModule):
+    def __init__(self):
+        argument_spec = dict(
+            view=dict(
+                default="summary",
+                choices=["summary", "full"],
+            ),
+        )
+
+        super().__init__(argument_spec=argument_spec, supports_check_mode=True)
+
+    def prepare(self):
+        super().prepare()
 
         # Set the parameters
-        self.cluster = self.get_param("cluster")
-        self.service = self.get_param("service")
         self.view = self.get_param("view")
 
         # Initialize the return values
-        self.config = []
+        self.output["config"] = []
 
-        # Execute the logic
-        self.process()
-
-    @ClouderaManagerModule.handle_process
     def process(self):
-        try:
-            ClustersResourceApi(self.api_client).read_cluster(self.cluster)
-        except ApiException as ex:
-            if ex.status == 404:
-                self.module.fail_json(msg="Cluster does not exist: " + self.cluster)
-            else:
-                raise ex
+        super().process()
 
-        api_instance = ServicesResourceApi(self.api_client)
+        api = ServicesResourceApi(self.api_client)
 
         try:
-            results = api_instance.read_service_config(
+            results = api.read_service_config(
                 cluster_name=self.cluster, service_name=self.service, view=self.view
             )
 
-            self.config = [s.to_dict() for s in results.items]
+            self.output["config"] = [s.to_dict() for s in results.items]
         except ApiException as e:
             if e.status != 404:
                 raise e
 
 
 def main():
-    module = ClouderaManagerModule.ansible_module(
-        argument_spec=dict(
-            cluster=dict(required=True, aliases=["cluster_name"]),
-            service=dict(required=True, aliases=["service_name", "name"]),
-            view=dict(
-                default="summary",
-                choices=["summary", "full"],
-            ),
-        ),
-        supports_check_mode=True,
-    )
-
-    result = ClusterServiceConfigInfo(module)
-
-    output = dict(
-        changed=False,
-        config=result.config,
-    )
-
-    if result.debug:
-        log = result.log_capture.getvalue()
-        output.update(debug=log, debug_lines=log.split("\n"))
-
-    module.exit_json(**output)
+    ClusterServiceConfigInfo().execute()
 
 
 if __name__ == "__main__":

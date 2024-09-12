@@ -116,7 +116,5 @@ def test_invalid_cluster(conn, module_args):
         }
     )
 
-    with pytest.raises(AnsibleExitJson) as e:
+    with pytest.raises(AnsibleFailJson, match="Cluster does not exist: BOOM"):
         service_config_info.main()
-
-    assert len(e.value.config) == 0
