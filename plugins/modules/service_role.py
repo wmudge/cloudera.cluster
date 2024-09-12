@@ -108,12 +108,6 @@ options:
       - A set of tags applied to the role.
       - To unset a tag, use C(None) as its value.
     type: dict
-  purge:
-    description:
-      - Flag for whether the declared role tags should append or overwrite any existing tags.
-      - To clear all tags, set I(tags={}), i.e. an empty dictionary, and I(purge=True).
-    type: bool
-    default: False
   state:
     description:
       - The state of the role.
@@ -130,6 +124,8 @@ extends_documentation_fragment:
   - ansible.builtin.action_common_attributes
   - cloudera.cluster.cm_options
   - cloudera.cluster.cm_endpoint
+  - cloudera.cluster.purge
+  - cloudera.cluster.mutation
 attributes:
   check_mode:
     support: full
